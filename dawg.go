@@ -30,6 +30,7 @@ type letter struct {
 
 type state struct {
 	final bool
+	keywords []int //List of keywords which lead to this state
 
 	letters      *letter // Root of the letter tree and the letter linked list
 	lettersCount int     // Number of letters in the tree/linked list
@@ -106,7 +107,7 @@ func CreateDAWGFromFile(fileName string) (dawg *DAWG, err error) {
 	var nbNodes uint64 = 1
 	maxWordSize := 0
 	for scanner.Scan() {
-		_, size, createdNodes := addWord(initialState, scanner.Text())
+		_, size, createdNodes := addWord(initialState, scanner.Text(), 0)
 		if size > maxWordSize {
 			maxWordSize = size
 		}
@@ -125,7 +126,7 @@ func CreateDAWG(words []string) *DAWG {
 	var nbNodes uint64 = 1
 	maxWordSize := 0
 	for _, word := range words {
-		_, size, createdNodes := addWord(initialState, word)
+		_, size, createdNodes := addWord(initialState, word, 0)
 		if size > maxWordSize {
 			maxWordSize = size
 		}
@@ -198,7 +199,7 @@ func analyseSubTrie(curState *state, levels []*state, channels []chan int) (subL
 }
 
 // Add a new word to the Trie
-func addWord(initialState *state, word string) (newEndState bool, wordSize int, createdNodes uint64) {
+func addWord(initialState *state, word string, keyword int) (newEndState bool, wordSize int, createdNodes uint64) {
 	curState := initialState
 	for _, l := range word {
 		var curLetter *letter
@@ -219,9 +220,10 @@ func addWord(initialState *state, word string) (newEndState bool, wordSize int, 
 					curLetter = curLetter.right
 				}
 			}
+			// curLetter.state.keywords = append(curLetter.state.keywords, keyword)
 		}
 		if curLetter.state == nil {
-			curLetter.state = &state{final: false, letter: curLetter}
+			curLetter.state = &state{final: false, letter: curLetter, keywords: []int{keyword}}
 			createdNodes++
 			curState.lettersCount++
 			if curState.final == false && curState.lettersCount == 1 || curState.lettersCount > 1 {
@@ -322,7 +324,7 @@ func LoadDAWGFromFile(fileName string) (dawg *DAWG, err error) {
 			return
 		}
 
-		states[nodeNumber] = &state{final: finalNode}
+		states[nodeNumber] = &state{final: finalNode, keywords: []int{0}}
 		initialState = states[nodeNumber]
 		var char rune = 0
 		for i, str := range fields[2:] {

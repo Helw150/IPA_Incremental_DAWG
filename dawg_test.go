@@ -25,7 +25,7 @@ func TestIncrementalSearch(t *testing.T) {
 	test, err = dawg.IncrementalSearch(test, 'e')
 	test, err = dawg.IncrementalSearch(test, 's')
 	test, err = dawg.IncrementalSearch(test, 't')
-	if err != nil || !(test.final) {
+	if err != nil || !(test.final) || test.keywords == nil {
 		t.Error("Incremental Search failed")
 	}
 }
@@ -41,8 +41,15 @@ func TestSaveDawgFile(t *testing.T) {
 
 func TestCreateBigDAWGfromFile(t *testing.T) {
 	dawg, err := CreateDAWGFromFile("TestDawg.txt")
-	if err != nil {
+	if err != nil || dawg.initialState.keywords == nil {
 		t.Error("Creation From File Failed")
 	}
 	dawg.SaveToFile("Test.dawg")
+}
+
+func TestLoadFromFile(t *testing.T) {
+	dawg, err := LoadDAWGFromFile("TestDawg.txt")
+	if err != nil || dawg.initialState.keywords == nil {
+		t.Error("Load From File Failed")
+	}
 }
