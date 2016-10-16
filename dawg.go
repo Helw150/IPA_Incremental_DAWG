@@ -8,7 +8,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"math"
+	"log"
+	"regexp"
+	"fmt"
+//	"math"
 )
 
 // DAWG is used to store the representation of the Directly Acyclic Word Graph
@@ -55,40 +58,89 @@ type Pair struct {
 	L string
 	R string
 }
-
-func Deletion(L string, R string, weight float64) (p Permutation){
-	weight += 1
-	p = Permutation{word: L + R[1:], weight: weight}
-	return p
-}
-func Insertion(c rune, L string, R string, weight float64) (p Permutation) {
-	weight += 1
-	p = Permutation{word: L + strconv.QuoteRune(c) + R, weight: weight} 
-	return p
-}
-func Replacement(c rune, L string, R string, weight float64) (p Permutation) {
-	weight += 1 - math.Pow(similarity(c, R[0]), 10)
-	p = Permutation{word: L + strconv.QuoteRune(c) + R[1:], weight: weight}
-	return p
-}
-func Permute(word string, weight float64) (words []Permutation) {
-	letters    := []rune{18, 38, 2, 19, 17, 10, 31, 46, 12, 22, 33, 43, 34, 32, 21, 25, 8, 42, 41, 28, 44, 45, 23, 49, 40, 1, 24, 4, 15, 35, 26, 14, 27, 37, 5, 13, 11, 7, 20, 47, 6, 29, 9, 30, 36, 16, 48, 3, 39}
-	var splits []Pair
-	var p []Permutation
-	for i := 0; i < len(word) + 1; i++ {
-		splits = append(splits, Pair{L: word[:i], R: word[i:]})
-	}
-	for _, split := range splits {
-		L := split.L
-		R := split.R
-		p = append(p, Deletion(L, R, weight))
-		for _, c := range letters {
-			p = append(p, Replacement(c, L, R, weight))
-			p = append(p, Insertion(c, L, R, weight))
+func Reconstruction(table string) (PHRASE string) {
+	re := regexp.MustCompile(`"([^"]*)"`)
+	phones := re.FindAllString(table, -1)
+	phonesNoSpace := make([]string, 0)
+	for _, v := range phones {
+		if v != " " {
+			v, _ = strconv.Unquote(v)
+			phonesNoSpace = append(phonesNoSpace, v)
 		}
 	}
-	return p 
+	PHRASE = strings.Join(phonesNoSpace, "")
+	return PHRASE
 }
+
+func ConsecutiveGroups(phrase string, target string) (possibilities []string) {
+	for i := len(target) - 1; i <= len(target) + 1; i++ {
+		for j := 0; j < len(phrase)+1-i; j++ {
+			possibilities = append(possibilities, phrase[j:j+i])
+		}
+	}
+	
+	return possibilities
+}
+
+func SearchFile(indexFile string, searchterm string) (files []string, err error) {
+	dawg, _ := CreateDAWGFromFile(searchterm +".txt")
+	if file, err := os.Open(indexFile); err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.Split(scanner.Text(), "\t")
+			PHRASE := line[3]
+			PHRASE = Reconstruction(PHRASE)
+			possibilities := ConsecutiveGroups(PHRASE, searchterm)
+			for _, possibility := range possibilities {
+				result, _ := dawg.Search(possibility, 0, 1, false, false)
+				if len(result) > 0{
+					files = append(files, line[0])
+				}
+			}
+		}
+		if err = scanner.Err(); err!= nil{
+			log.Fatal(err)
+		}
+	} else {
+		log.Fatal(err)
+	}
+	return files, nil
+}
+
+// func Deletion(L string, R string, weight float64) (p Permutation){
+// 	weight += 1
+// 	p = Permutation{word: L + R[1:], weight: weight}
+// 	return p
+// }
+// func Insertion(c rune, L string, R string, weight float64) (p Permutation) {
+// 	weight += 1
+// 	p = Permutation{word: L + strconv.QuoteRune(c) + R, weight: weight} 
+// 	return p
+// }
+// func Replacement(c rune, L string, R string, weight float64) (p Permutation) {
+// 	weight += 1 - math.Pow(similarity(c, R[0]), 10)
+// 	p = Permutation{word: L + strconv.QuoteRune(c) + R[1:], weight: weight}
+// 	return p
+// }
+// func Permute(word string, weight float64) (words []Permutation) {
+// 	letters    := []rune{18, 38, 2, 19, 17, 10, 31, 46, 12, 22, 33, 43, 34, 32, 21, 25, 8, 42, 41, 28, 44, 45, 23, 49, 40, 1, 24, 4, 15, 35, 26, 14, 27, 37, 5, 13, 11, 7, 20, 47, 6, 29, 9, 30, 36, 16, 48, 3, 39}
+// 	var splits []Pair
+// 	var p []Permutation
+// 	for i := 0; i < len(word) + 1; i++ {
+// 		splits = append(splits, Pair{L: word[:i], R: word[i:]})
+// 	}
+// 	for _, split := range splits {
+// 		L := split.L
+// 		R := split.R
+// 		p = append(p, Deletion(L, R, weight))
+// 		for _, c := range letters {
+// 			p = append(p, Replacement(c, L, R, weight))
+// 			p = append(p, Insertion(c, L, R, weight))
+// 		}
+// 	}
+// 	return p 
+// }
 
 // Check if two states are equals.
 // Two states are equals :
