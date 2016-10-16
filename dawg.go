@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"math"
 )
 
 // DAWG is used to store the representation of the Directly Acyclic Word Graph
@@ -30,7 +31,6 @@ type letter struct {
 
 type state struct {
 	final bool
-	keywords []int //List of keywords which lead to this state
 
 	letters      *letter // Root of the letter tree and the letter linked list
 	lettersCount int     // Number of letters in the tree/linked list
@@ -44,6 +44,50 @@ type state struct {
 type word struct {
 	content  string
 	nextWord *word
+}
+
+type Permutation struct {
+	word string
+	weight float64
+}
+
+type Pair struct {
+	L string
+	R string
+}
+
+func Deletion(L string, R string, weight float64) (p Permutation){
+	weight += 1
+	p = Permutation{word: L + R[1:], weight: weight}
+	return p
+}
+func Insertion(c rune, L string, R string, weight float64) (p Permutation) {
+	weight += 1
+	p = Permutation{word: L + strconv.QuoteRune(c) + R, weight: weight} 
+	return p
+}
+func Replacement(c rune, L string, R string, weight float64) (p Permutation) {
+	weight += 1 - math.Pow(similarity(c, R[0]), 10)
+	p = Permutation{word: L + strconv.QuoteRune(c) + R[1:], weight: weight}
+	return p
+}
+func Permute(word string, weight float64) (words []Permutation) {
+	letters    := []rune{18, 38, 2, 19, 17, 10, 31, 46, 12, 22, 33, 43, 34, 32, 21, 25, 8, 42, 41, 28, 44, 45, 23, 49, 40, 1, 24, 4, 15, 35, 26, 14, 27, 37, 5, 13, 11, 7, 20, 47, 6, 29, 9, 30, 36, 16, 48, 3, 39}
+	var splits []Pair
+	var p []Permutation
+	for i := 0; i < len(word) + 1; i++ {
+		splits = append(splits, Pair{L: word[:i], R: word[i:]})
+	}
+	for _, split := range splits {
+		L := split.L
+		R := split.R
+		p = append(p, Deletion(L, R, weight))
+		for _, c := range letters {
+			p = append(p, Replacement(c, L, R, weight))
+			p = append(p, Insertion(c, L, R, weight))
+		}
+	}
+	return p 
 }
 
 // Check if two states are equals.
@@ -107,7 +151,7 @@ func CreateDAWGFromFile(fileName string) (dawg *DAWG, err error) {
 	var nbNodes uint64 = 1
 	maxWordSize := 0
 	for scanner.Scan() {
-		_, size, createdNodes := addWord(initialState, scanner.Text(), 0)
+		_, size, createdNodes := addWord(initialState, scanner.Text())
 		if size > maxWordSize {
 			maxWordSize = size
 		}
@@ -126,7 +170,7 @@ func CreateDAWG(words []string) *DAWG {
 	var nbNodes uint64 = 1
 	maxWordSize := 0
 	for _, word := range words {
-		_, size, createdNodes := addWord(initialState, word, 0)
+		_, size, createdNodes := addWord(initialState, word)
 		if size > maxWordSize {
 			maxWordSize = size
 		}
@@ -199,7 +243,7 @@ func analyseSubTrie(curState *state, levels []*state, channels []chan int) (subL
 }
 
 // Add a new word to the Trie
-func addWord(initialState *state, word string, keyword int) (newEndState bool, wordSize int, createdNodes uint64) {
+func addWord(initialState *state, word string) (newEndState bool, wordSize int, createdNodes uint64) {
 	curState := initialState
 	for _, l := range word {
 		var curLetter *letter
@@ -220,10 +264,9 @@ func addWord(initialState *state, word string, keyword int) (newEndState bool, w
 					curLetter = curLetter.right
 				}
 			}
-			// curLetter.state.keywords = append(curLetter.state.keywords, keyword)
 		}
 		if curLetter.state == nil {
-			curLetter.state = &state{final: false, letter: curLetter, keywords: []int{keyword}}
+			curLetter.state = &state{final: false, letter: curLetter}
 			createdNodes++
 			curState.lettersCount++
 			if curState.final == false && curState.lettersCount == 1 || curState.lettersCount > 1 {
@@ -324,7 +367,7 @@ func LoadDAWGFromFile(fileName string) (dawg *DAWG, err error) {
 			return
 		}
 
-		states[nodeNumber] = &state{final: finalNode, keywords: []int{0}}
+		states[nodeNumber] = &state{final: finalNode}
 		initialState = states[nodeNumber]
 		var char rune = 0
 		for i, str := range fields[2:] {
