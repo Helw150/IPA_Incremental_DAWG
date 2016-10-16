@@ -1,30 +1,3 @@
 # dawg
 
-[Directed Acyclic Word Graph](http://en.wikipedia.org/wiki/Directed_acyclic_word_graph) implementation in Go, with fuzzy search of words in the graph.
-
-# Usage
-
-Import the library:
-
-    import "github.com/ftbe/dawg"
-
-Use it:
-```go
-    graph, err := dawg.CreateDAWGFromFile(os.Args[1])
-    if err != nil {
-        // Do something
-        return
-    }
-    words, err := graph.Search("aging", 2, 50, true, true)
-    if err != nil {
-        // Do something
-        return
-    }
-    for _, word := range words {
-        fmt.Println(word)
-    }
-```
-
-# Documentation
-
-API documentation is [available on godoc](http://godoc.org/github.com/ftbe/dawg).
+[Directed Acyclic Word Graph](http://en.wikipedia.org/wiki/Directed_acyclic_word_graph) implementation in Go. This version has Incremental progression through the graph. It also has support for Search through a particular style of index file phonetically. This was created for project Metalang.
