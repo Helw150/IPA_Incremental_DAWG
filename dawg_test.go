@@ -1,7 +1,7 @@
 package dawg
 
 import "testing"
-import "fmt"
+import "metalang.io/levenshtein"
 
 func TestCreateDAWG(t *testing.T) {
 	dawg := CreateDAWG([]string{"test", "rest", "nest", "note"})
@@ -54,10 +54,15 @@ func TestLoadFromFile(t *testing.T) {
 	}
 }
 
-func TestSearchFile(t *testing.T) {
-	files, err := SearchFile("testIndexFile.txt", "TestDawg")
-	if err != nil {
-		t.Error("Search Failed")
-	}
-	fmt.Println(files)
+// func TestSearchFile(t *testing.T) {
+// 	files, err := SearchFile("testIndexFile.txt", "TestDawg")
+// 	if err != nil {
+// 		t.Error("Search Failed")
+// 	}
+// 	fmt.Println(files)
+// }
+
+func TestAllign(t *testing.T) {
+	SCRIPT := levenshtein.EditScriptForStrings([]rune("attðəseɪmtaɪmpɒkənfɜːmmzɑːkɹɹiːdðatkɹɹaɪsttɪzvɛɹɪɡɒd"), []rune("atðəseɪmtaɪmpɔːlkənfɜːmzaʊəkɹiːdðatkɹaɪstɪzvɛɹɪɡɒd"), levenshtein.DefaultOptions)
+	ScriptToAllign([]rune("attðəseɪmtaɪmpɒkənfɜːmmzɑːkɹɹiːdðatkɹɹaɪsttɪzvɛɹɪɡɒd"), []rune("atðəseɪmtaɪmpɔːlkənfɜːmzaʊəkɹiːdðatkɹaɪstɪzvɛɹɪɡɒd"), SCRIPT)
 }

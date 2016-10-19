@@ -3,6 +3,7 @@ package dawg
 
 import (
 	"bufio"
+	"metalang.io/levenshtein"
 	"bytes"
 	"errors"
 	"os"
@@ -10,9 +11,26 @@ import (
 	"strings"
 	"log"
 	"regexp"
-	"fmt"
 //	"math"
 )
+
+var labels = map[string]rune{"aɪ": 28, "n": 1, "n̩": 51, "ə": 4, "s": 7, "m": 22, "θ": 10, "ɛ": 18, "aʊ": 43, "ɡ": 36, "f": 15, "aʊə": 47, "v": 35, "eɪ": 38, "a": 0, "əʊ": 24, "d": 2, "ɬ": 49, "ʊ": 19, "k": 62, "j": 41, "x": 52, "nʲ": 59, "dʒ": 42, "eə": 17, "z": 12, "r": 61, "ɣ": 60, "ɜː": 26, "w": 27, "ɑː": 34, "oː": 58, "ɔ": 54, "iə": 40, "ð": 3, "ç": 55, "ɹ": 13, "ɒ": 31, "ʊə": 6, "ʃ": 32, "ɔɪ": 44, "ɐ": 25, "uː": 37, "ɔ̃": 57, "tʃ": 39, "h": 30, "əl": 16, "ɪ": 8, "ɔː": 33, "ʌ": 14, "l": 9, "aɪə": 48, "ɑ̃": 53, "iː": 29, "ɡʲ": 56, "ŋ": 11, "ɾ": 50, "ʒ": 46, "t": 21, "b": 23, "p": 5}
+
+var labelsUnmap = map[rune]string{0: "a", 1: "n", 2: "d", 3: "ð", 4: "ə", 5: "p", 6: "ʊə", 7: "s", 8: "ɪ", 9: "l", 10: "θ", 11: "ŋ", 12: "z", 13: "ɹ", 14: "ʌ", 15: "f", 16: "əl", 17: "eə", 18: "ɛ", 19: "ʊ", 62: "k", 21: "t", 22: "m", 23: "b", 24: "əʊ", 25: "ɐ", 26: "ɜː", 27: "w", 28: "aɪ", 29: "iː", 30: "h", 31: "ɒ", 32: "ʃ", 33: "ɔː", 34: "ɑː", 35: "v", 36: "ɡ", 37: "uː", 38: "eɪ", 39: "tʃ", 40: "iə", 41: "j", 42: "dʒ", 43: "aʊ", 44: "ɔɪ", 61: "r", 46: "ʒ", 47: "aʊə", 48: "aɪə", 49: "ɬ", 50: "ɾ", 51: "n̩", 52: "x", 53: "ɑ̃", 54: "ɔ", 55: "ç", 56: "ɡʲ", 57: "ɔ̃", 58: "oː", 59: "nʲ", 60: "ɣ"}
+
+var InsertDict = make(map[rune]int)
+var DeleteDict = make(map[rune]int)
+var SubDict = make(map[string]int)
+
+func InitializeDict() {
+	for _, Phone := range labels {
+		InsertDict[Phone] = 0
+		DeleteDict[Phone] = 0
+		for _, SecondPhone := range labels {
+			SubDict[labelsUnmap[Phone]+"\t"+labelsUnmap[SecondPhone]] = 0
+		}
+	}
+}
 
 // DAWG is used to store the representation of the Directly Acyclic Word Graph
 type DAWG struct {
@@ -58,7 +76,7 @@ type Pair struct {
 	L string
 	R string
 }
-func Reconstruction(table string) (PHRASE string) {
+func Reconstruction(table string) (PHRASE []rune) {
 	re := regexp.MustCompile(`"([^"]*)"`)
 	phones := re.FindAllString(table, -1)
 	phonesNoSpace := make([]string, 0)
@@ -68,7 +86,18 @@ func Reconstruction(table string) (PHRASE string) {
 			phonesNoSpace = append(phonesNoSpace, v)
 		}
 	}
-	PHRASE = strings.Join(phonesNoSpace, "")
+	for phone := range phonesNoSpace {
+		PHRASE = append(PHRASE, labels[phonesNoSpace[phone]])
+	}
+	return PHRASE
+}
+
+func ReconstructionExact(underscored string) (PHRASE []rune) {
+	underscored = strings.Replace(underscored, " ", "", -1)
+	phones := strings.Split(underscored, "_")
+	for phone := range phones {
+		PHRASE = append(PHRASE, labels[phones[phone]])
+	}
 	return PHRASE
 }
 
@@ -78,24 +107,126 @@ func ConsecutiveGroups(phrase string, target string) (possibilities []string) {
 			possibilities = append(possibilities, phrase[j:j+i])
 		}
 	}
-	
 	return possibilities
 }
 
+func stringInSlice(str string, list []string) bool {
+ 	for _, v := range list {
+ 		if v == str {
+ 			return true
+ 		}
+ 	}
+ 	return false
+}
+
+func ScriptToAllign(source []rune, target []rune, script levenshtein.EditScript) (SOURCE []rune, TARGET []rune) {
+	var sourcebuffer bytes.Buffer
+	var targetbuffer bytes.Buffer
+	i := 0
+	j := 0
+	for _, operation := range script {
+		if i < len(source) && source[i] == 20 {
+			sourcebuffer.WriteRune(' ')
+			targetbuffer.WriteRune(' ')
+			i++
+		}
+		if operation == 3 {
+			sourcebuffer.WriteRune(source[i])
+			targetbuffer.WriteRune(target[j])
+			i++
+			j++
+		} else if operation == 2 {
+			sourcebuffer.WriteRune(source[i])
+			targetbuffer.WriteRune(target[j])
+			if _, ok := SubDict[labelsUnmap[source[i]]+"\t"+labelsUnmap[target[j]]]; ok {
+				log.Println("debug1")
+				SubDict[labelsUnmap[source[i]]+"\t"+labelsUnmap[target[j]]] += 1
+			} else{
+				SubDict[labelsUnmap[source[i]]+"\t"+labelsUnmap[target[j]]] = 1
+			}
+			i++
+			j++
+		} else if operation == 0 {
+			sourcebuffer.WriteRune('-')
+			targetbuffer.WriteRune(target[j])
+			if _, ok := InsertDict[target[j]]; ok {
+				InsertDict[target[j]] += 1
+			} else{
+				InsertDict[target[j]] = 1
+			}
+			j++
+		} else {
+			sourcebuffer.WriteRune(source[i])
+			targetbuffer.WriteRune('-')
+			if _, ok := DeleteDict[source[i]]; ok {
+				log.Println("debug3")
+				DeleteDict[source[i]] += 1
+			} else{
+				DeleteDict[source[i]] = 1
+			}
+			i++
+		}
+		// log.Println("source ", sourcebuffer.String())
+		// log.Println("target ", targetbuffer.String())
+	}
+	SOURCE = []rune(sourcebuffer.String())
+	TARGET = []rune(targetbuffer.String())
+	log.Println(SOURCE)
+	log.Println(TARGET)
+	// log.Println(InsertDict)
+	// log.Println(SubDict)
+	// log.Println(DeleteDict)
+	return SOURCE, TARGET
+}
+
+func AllignStrings(indexFile string) /*(EXACT string, PHRASE string)*/ {
+	if file, err := os.Open(indexFile); err == nil {
+		defer file.Close()
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			line := strings.Split(scanner.Text(), "\t")
+			EXACT := line[2]
+			PHRASE := line[3]
+			EXACTR := ReconstructionExact(EXACT)
+			PHRASER := Reconstruction(PHRASE)
+			InitializeDict()
+			SCRIPT := levenshtein.EditScriptForStrings(EXACTR, PHRASER, levenshtein.DefaultOptions)
+			ScriptToAllign(EXACTR, PHRASER, SCRIPT)
+		}
+		Insfile, _ := os.Create("InsertDict.txt")
+		Delfile, _ := os.Create("DeleteDict.txt")
+		Subfile, _ := os.Create("SubDict.txt")
+		log.Println(InsertDict)
+		for key, value := range InsertDict {
+			Insfile.WriteString(labelsUnmap[key] + "\t" + strconv.Itoa(value) + "\n")
+		}
+		for key, value := range DeleteDict {
+			Delfile.WriteString(labelsUnmap[key] + "\t" + strconv.Itoa(value) + "\n")
+		}
+		for key, value := range SubDict {
+			Subfile.WriteString(key + "\t" + strconv.Itoa(value) + "\n")
+		}
+	}
+}
+
 func SearchFile(indexFile string, searchterm string) (files []string, err error) {
-	dawg, _ := CreateDAWGFromFile(searchterm +".txt")
+	dawg, _ := CreateDAWGFromFile("/home/william/LingProj/FuckUpAvoidance/speech-recognizer/libs/search/keywords/" + searchterm + ".txt")
+	searchtermFile, err := os.Open("/home/william/LingProj/FuckUpAvoidance/speech-recognizer/libs/search/keywords/" + searchterm + ".txt")
+	searcher := bufio.NewScanner(searchtermFile)
+	searcher.Scan()
 	if file, err := os.Open(indexFile); err == nil {
 		defer file.Close()
 		scanner := bufio.NewScanner(file)
 		for scanner.Scan() {
 			line := strings.Split(scanner.Text(), "\t")
 			PHRASE := line[3]
-			PHRASE = Reconstruction(PHRASE)
-			possibilities := ConsecutiveGroups(PHRASE, searchterm)
+			PHRASE = string(Reconstruction(PHRASE))
+			possibilities := ConsecutiveGroups(PHRASE, searcher.Text())
 			for _, possibility := range possibilities {
 				result, _ := dawg.Search(possibility, 0, 1, false, false)
 				if len(result) > 0{
 					files = append(files, line[0])
+					break
 				}
 			}
 		}
